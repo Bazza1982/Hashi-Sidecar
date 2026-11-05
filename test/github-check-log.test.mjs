@@ -16,8 +16,9 @@ function fixture(t) {
     expectedGitHubLogin:'operator',taskName:'HashiHubV2-GitHubRead-test',taskPath:'\\',userProfile:root,
     ghPath:process.execPath,gitPath:process.execPath,workerPath:join(root,'worker.mjs'),workerSHA256:'a'.repeat(64),
     repositories:['example/one'],writeRepositories:[]};
-  const r={schemaVersion:1,installationId:c.installationId,id:randomUUID(),issuedAt:Date.now(),
-    expiresAt:Date.now()+120000,operation:'check-log',repo:'example/one',sha:SHA,job:JOB};
+  const issuedAt=Date.now();
+  const r={schemaVersion:1,installationId:c.installationId,id:randomUUID(),issuedAt,
+    expiresAt:issuedAt+120000,operation:'check-log',repo:'example/one',sha:SHA,job:JOB};
   const job={id:JOB,runId:12,sha:SHA,status:'completed',conclusion:'failure',name:'Windows CI',
     url:'https://github.com/example/one/actions/runs/12/job/'+JOB,
     steps:[{name:'Install',status:'completed',conclusion:'failure',number:3}]};

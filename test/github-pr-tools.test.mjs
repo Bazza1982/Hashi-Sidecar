@@ -31,8 +31,9 @@ function fixture(t) {
   return f;
 }
 function request(f,operation,extra={}) {
+  const issuedAt=Date.now();
   return {schemaVersion:1,installationId:f.config.installationId,id:randomUUID(),
-    issuedAt:Date.now(),expiresAt:Date.now()+120000,operation,repo:'example/one',pr:4,...extra};
+    issuedAt,expiresAt:issuedAt+120000,operation,repo:'example/one',pr:4,...extra};
 }
 function view(f){return sidecar.executeRead(f.config,request(f,'pr-view'),f.port);}
 function editRequest(f,extra={}){return request(f,'pr-edit',{sha:SHA,revision:view(f).revision,body:'Updated body\n',...extra});}
@@ -70,6 +71,8 @@ test('title-only editing and explicit empty body are supported',t=>{
 });
 
 test('read-only repository scope still reads but cannot edit or comment',t=>{
+  let now=Date.now();
+  t.mock.method(Date,'now',()=>now++);
   const f=fixture(t),r=editRequest(f);f.config.writeRepositories=[];assert.equal(view(f).number,4);
   assert.throws(()=>edit(f,r),/SIDECAR_WRITE_SCOPE_REJECTED/);
   assert.throws(()=>sidecar.executeWrite(f.config,request(f,'pr-comment',{sha:SHA,body:'No scope'}),{pr:f.port}),/SIDECAR_WRITE_SCOPE_REJECTED/);assert.equal(f.mutations,0);
