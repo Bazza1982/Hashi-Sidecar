@@ -1,0 +1,22 @@
+{
+  "task": "Describe the owner-authorized local administration task",
+  "profiles": [
+    "system",
+    "user"
+  ],
+  "capabilities": [
+    "identity",
+    "process",
+    "script",
+    "file",
+    "acl",
+    "service",
+    "registry",
+    "task"
+  ],
+  "callerSids": [
+    "S-1-5-18"
+  ],
+  "durationSeconds": 3600,
+  "allowAnyCode": true
+}

@@ -1,0 +1,17 @@
+node_modules/
+state/
+config/*.json
+!config/*.example.json
+.env
+.env.*
+!.env.example
+*.sqlite*
+*.db*
+*.log
+coverage/
+dist/
+.cache/
+*.exe
+*.dll
+*.zip
+*.tgz
