@@ -1,0 +1,13 @@
+{
+  "targets": [
+    {
+      "sid": "<Target Windows user SID>"
+    }
+  ],
+  "publisherSids": [
+    "S-1-5-18"
+  ],
+  "issuerSids": [
+    "S-1-5-18"
+  ]
+}

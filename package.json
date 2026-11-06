@@ -1,0 +1,16 @@
+{
+  "name": "hashi-sidecar",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Standalone Windows service-to-user administration broker with optional GitHub integration.",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "check": "node scripts/check-sidecar.mjs && node scripts/check-publication.mjs && npm test",
+    "check:public": "node scripts/check-publication.mjs --history",
+    "test": "node --test test/*.test.mjs"
+  }
+}

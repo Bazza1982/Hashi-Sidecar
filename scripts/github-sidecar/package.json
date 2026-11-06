@@ -1,0 +1,7 @@
+{
+  "name": "hashi-github-sidecar",
+  "version": "1.6.0",
+  "private": true,
+  "description": "Permanent local Windows client for scoped GitHub reads, writes, branch pushes and pull requests",
+  "schemaVersion": 1
+}

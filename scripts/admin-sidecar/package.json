@@ -1,0 +1,7 @@
+{
+  "name": "hashi-admin-sidecar",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Task-authorized local administration broker with Windows identity lanes and GitHub account operations."
+}
