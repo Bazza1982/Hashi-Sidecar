@@ -1,37 +1,101 @@
 name: sidecar-source
-on: [push, pull_request]
+'on':
+  push:
+    branches:
+    - main
+  pull_request: null
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run all retained checks for a stable major/cross-domain candidate
+        type: boolean
+        required: false
+        default: true
 permissions:
   contents: read
 jobs:
+  ci-plan:
+    name: Select necessary checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      check: ${{ steps.scope.outputs.check }}
+      windows: ${{ steps.scope.outputs.windows }}
+      public: ${{ steps.scope.outputs.public }}
+      full: ${{ steps.scope.outputs.full }}
+      linux_os: ${{ steps.scope.outputs.linux_os }}
+      python_versions: ${{ steps.scope.outputs.python_versions }}
+      node_versions: ${{ steps.scope.outputs.node_versions }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Verify selection and failure contracts
+      run: python -B -m unittest discover -s .github -p test_ci_plan.py -q
+    - name: Select checks from actual impact
+      id: scope
+      run: python .github/ci_plan.py plan
   check:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-2022]
-        node: ['22', '24']
+        os: ${{ fromJSON(needs.ci-plan.outputs.linux_os) }}
+        node: ${{ fromJSON(needs.ci-plan.outputs.node_versions) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: ${{ matrix.node }}
-      - run: npm run check
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: ${{ matrix.node }}
+    - run: npm run check
+    needs:
+    - ci-plan
+    if: ${{ needs.ci-plan.result == 'success' && needs.ci-plan.outputs.check == 'true' }}
   public-source:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '22'
-      - run: npm run check:public
-      - name: Scan credentials in all reachable history
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive="$RUNNER_TEMP/gitleaks.tar.gz"
-          curl --fail --silent --show-error --location --output "$archive" https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
-          printf '%s  %s\n' '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' "$archive" | sha256sum --check --status
-          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" gitleaks
-          "$RUNNER_TEMP/gitleaks" git . --log-opts="--all --full-history" --redact --no-banner
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '22'
+    - run: npm run check:public
+    - name: Scan credentials in all reachable history
+      shell: bash
+      run: |
+        set -euo pipefail
+        archive="$RUNNER_TEMP/gitleaks.tar.gz"
+        curl --fail --silent --show-error --location --output "$archive" https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+        printf '%s  %s\n' '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' "$archive" | sha256sum --check --status
+        tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" gitleaks
+        "$RUNNER_TEMP/gitleaks" git . --log-opts="--all --full-history" --redact --no-banner
+    needs:
+    - ci-plan
+    if: ${{ needs.ci-plan.result == 'success' && needs.ci-plan.outputs.public == 'true' }}
+  ci-result:
+    name: sidecar-source result
+    if: ${{ always() }}
+    needs:
+    - ci-plan
+    - check
+    - public-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Require actual success of every selected check
+      env:
+        CI_NEEDS: ${{ toJSON(needs) }}
+      run: python .github/ci_plan.py summary --jobs '{"check":"check","public-source":"public"}'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true

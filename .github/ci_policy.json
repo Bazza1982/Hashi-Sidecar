@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "global_paths": [
+    "requirements*.txt",
+    "requirements*.lock",
+    "constraints/**",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "pyproject.toml",
+    "package.json",
+    "Cargo.lock",
+    "Cargo.toml",
+    "tests/conftest.py",
+    "conftest.py",
+    "pytest.ini",
+    "tox.ini",
+    ".python-version",
+    ".node-version",
+    ".nvmrc",
+    "global.json",
+    "scripts/**/package.json"
+  ],
+  "static_paths": [
+    "*.md",
+    "docs/**",
+    "LICENSE",
+    "LICENSE.*",
+    "NOTICE",
+    "NOTICE.*",
+    ".gitignore",
+    ".editorconfig",
+    ".github/**"
+  ],
+  "groups": {
+    "check": {
+      "paths": [
+        "scripts/**",
+        "test/**",
+        "examples/**"
+      ]
+    },
+    "windows": {
+      "paths": [
+        "scripts/*windows*",
+        "scripts/*native*",
+        "scripts/*account*",
+        "scripts/*credential*",
+        "scripts/*broker*",
+        "test/*windows*",
+        "test/*native*",
+        "test/*account*",
+        "test/*credential*",
+        "test/*broker*",
+        "scripts/admin-sidecar/**",
+        "scripts/standalone/**",
+        "scripts/*.ps1",
+        "test/admin-*",
+        "test/standalone-*",
+        "test/qualify-*.ps1"
+      ]
+    },
+    "public": {
+      "paths": [],
+      "always": true
+    }
+  },
+  "windows_runner": "windows-2022"
+}

@@ -1,0 +1,37 @@
+[
+  {
+    "paths": [
+      "README.md"
+    ],
+    "true": [
+      "public"
+    ],
+    "false": [
+      "check",
+      "windows"
+    ],
+    "full": false
+  },
+  {
+    "paths": [
+      "scripts/codec.mjs"
+    ],
+    "true": [
+      "check"
+    ],
+    "false": [
+      "windows"
+    ],
+    "full": false
+  },
+  {
+    "paths": [
+      "scripts/windows-account.mjs"
+    ],
+    "true": [
+      "check",
+      "windows"
+    ],
+    "full": false
+  }
+]
