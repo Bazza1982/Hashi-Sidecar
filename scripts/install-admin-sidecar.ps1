@@ -40,7 +40,7 @@ if($root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')){throw 'Use a dedicated 
 $manifestPath=Join-Path $root 'installation.json';$configPath=Join-Path $root 'data\config.json'
 $source=Join-Path $PSScriptRoot 'admin-sidecar'
 $package=Get-Content -LiteralPath (Join-Path $source 'package.json') -Raw | ConvertFrom-Json
-$sourceNames=@('core.mjs','execute.mjs','cli.mjs','bootstrap.mjs','Native.cs','Launcher.cs','actions.ps1','maintenance.mjs','Maintenance.cs','package.json','README.md')
+$sourceNames=@('core.mjs','execute.mjs','cli.mjs','bootstrap.mjs','Native.cs','Launcher.cs','WorkerLauncher.cs','actions.ps1','maintenance.mjs','Maintenance.cs','package.json','README.md')
 $sourcePins=@{};foreach($name in $sourceNames){$sourcePins[$name]=Hash (Join-Path $source $name)}
 $sourcePins['legacy-worker']=Hash (Join-Path $PSScriptRoot 'github-user-sidecar.mjs')
 $sourcePins['legacy-launcher']=Hash (Join-Path $PSScriptRoot 'github-sidecar\launcher.mjs')
@@ -111,6 +111,8 @@ if ($first) {
   if($LASTEXITCODE -ne 0){throw 'Native maintenance helper compilation failed.'}
   & $csc /nologo /target:exe (('/out:'+(Join-Path $stage 'bin\hashi-admin.exe'))) (Join-Path $source 'Launcher.cs')
   if($LASTEXITCODE -ne 0){throw 'Native client compilation failed.'}
+  & $csc /nologo /target:winexe /r:System.Web.Extensions.dll (('/out:'+(Join-Path $stage 'bin\hashi-admin-worker.exe'))) (Join-Path $source 'WorkerLauncher.cs')
+  if($LASTEXITCODE -ne 0){throw 'Windowless worker launcher compilation failed.'}
   foreach($name in $sourceNames){Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $stage ('maintenance\admin-sidecar\'+$name))}
   foreach($name in @('install-admin-sidecar.ps1','windows-security.ps1','github-user-sidecar.mjs')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $stage ('maintenance\'+$name))}
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'github-sidecar\launcher.mjs') -Destination (Join-Path $stage 'maintenance\github-sidecar\launcher.mjs')
@@ -156,9 +158,9 @@ $definitions=@()
 foreach($p in @('system','user','user-admin')){
  $definition=$config.profiles.$p
  if($definition.PSObject.Properties.Name -contains 'available' -and -not $definition.available){continue}
- $definitions+=@{name=$definition.taskName;sid=$definition.sid;profile=$p;logon=$(if($p -eq 'system'){'ServiceAccount'}else{'Interactive'});level=$(if($p -eq 'user'){'Limited'}else{'Highest'});exe=$config.nodePath;arguments=('"'+$config.workerPath+'" --worker --profile '+$p);description=('HASHI Admin Sidecar '+$config.installationId+' '+$p)}
+ $definitions+=@{name=$definition.taskName;sid=$definition.sid;profile=$p;logon=$(if($p -eq 'system'){'ServiceAccount'}else{'Interactive'});level=$(if($p -eq 'user'){'Limited'}else{'Highest'});exe=(Join-Path $root 'bin\hashi-admin-worker.exe');arguments=('--profile '+$p);description=('HASHI Admin Sidecar '+$config.installationId+' '+$p)}
 }
-if($config.compatibilityEnabled){$definitions+=@{name=$config.legacyTaskName;sid=$config.userSid;profile='compat';logon='Interactive';level='Limited';exe=$config.nodePath;arguments=('"'+(Join-Path $root 'compat\github-user-sidecar.mjs')+'" --worker --config "'+(Join-Path $root 'data\legacy\config.json')+'"');description=('HASHI Admin Sidecar '+$config.installationId+' compat')}}
+if($config.compatibilityEnabled){$definitions+=@{name=$config.legacyTaskName;sid=$config.userSid;profile='compat';logon='Interactive';level='Limited';exe=(Join-Path $root 'bin\hashi-admin-worker.exe');arguments='--compat';description=('HASHI Admin Sidecar '+$config.installationId+' compat')}}
 foreach($d in $definitions){
  $existing=Get-ScheduledTask -TaskPath '\' -TaskName $d.name -ErrorAction SilentlyContinue
  if($existing){

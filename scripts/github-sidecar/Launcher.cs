@@ -36,6 +36,16 @@ internal static class Launcher
         return result.ToString();
     }
 
+ static int Run(ProcessStartInfo info){
+  info.RedirectStandardInput=true;info.RedirectStandardOutput=true;info.RedirectStandardError=true;
+  using(Process p=Process.Start(info)){
+   var input=new System.Threading.Thread(()=>{try{Console.OpenStandardInput().CopyTo(p.StandardInput.BaseStream);}catch(IOException){}catch(ObjectDisposedException){}finally{try{p.StandardInput.Close();}catch(IOException){}catch(ObjectDisposedException){}}});
+   var output=new System.Threading.Thread(()=>{try{p.StandardOutput.BaseStream.CopyTo(Console.OpenStandardOutput());}catch(IOException){}catch(ObjectDisposedException){}});
+   var error=new System.Threading.Thread(()=>{try{p.StandardError.BaseStream.CopyTo(Console.OpenStandardError());}catch(IOException){}catch(ObjectDisposedException){}});
+   input.IsBackground=true;output.IsBackground=true;error.IsBackground=true;
+   input.Start();output.Start();error.Start();p.WaitForExit();output.Join();error.Join();return p.ExitCode;
+  }
+ }
     private static int Main(string[] args)
     {
         try
@@ -49,12 +59,9 @@ internal static class Launcher
             foreach (string argument in args) arguments.Append(" ").Append(Quote(argument));
             ProcessStartInfo info = new ProcessStartInfo(node, arguments.ToString());
             info.UseShellExecute = false;
+            info.CreateNoWindow = true;
             info.WorkingDirectory = root;
-            using (Process process = Process.Start(info))
-            {
-                process.WaitForExit();
-                return process.ExitCode;
-            }
+            return Run(info);
         }
         catch
         {

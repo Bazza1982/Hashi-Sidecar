@@ -16,6 +16,7 @@ export function installation(root){
  for(const[k,v]of Object.entries(expected))if(resolve(config[k]||'').toLowerCase()!==resolve(v).toLowerCase())fail('ADMIN_INSTALLATION_REJECTED');
  const required=['bin/launcher.mjs','bin/hashi-admin.exe','bin/admin-native.exe','runtime/node.exe','runtime/LICENSE',
  ...['cli.mjs','core.mjs','execute.mjs','actions.ps1'].map(p=>'releases/'+manifest.releaseId+'/'+p)];
+ if(Object.hasOwn(manifest.sourcePins||{},'WorkerLauncher.cs'))required.push('bin/hashi-admin-worker.exe');
  if(manifest.compatibility!==false)required.push('compat/github-user-sidecar.mjs','compat/launcher.mjs');
  if(manifest.version!=='2.0.0')required.push('bin/maintenance-native.exe','releases/'+manifest.releaseId+'/maintenance.mjs');
  if(required.some(p=>!Object.hasOwn(manifest.files,p)))fail('ADMIN_INSTALLATION_REJECTED');

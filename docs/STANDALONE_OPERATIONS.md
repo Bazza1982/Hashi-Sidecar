@@ -59,6 +59,21 @@ cancellation, revocation or timeout ends the owned job. To start persistent work
 use an authorized Windows service/scheduler/application mechanism. An uncertain
 external outcome needs observation and reconciliation, not a new request UUID.
 
+## Windowless workers
+
+Scheduled account workers start through a Windows GUI-subsystem launcher and
+create the bundled Node process without a console. SYSTEM, user and user-admin
+profiles keep their existing tokens, job ownership, durable results and exit
+codes; the optional compatibility worker uses the same windowless entry.
+The command-line client still preserves redirected stdin/stdout/stderr and exit
+status. An explicitly requested process.run window=normal is unchanged: this
+setting controls the requested application, not the Sidecar worker.
+
+Existing installations remain immutable. Install the changed release in a fresh
+owned root, qualify its task actions and identities, then update the caller's
+discovery entry. Keep old jobs/results in their original installation; do not
+replace task definitions or cancel unrelated active requests to hide a console.
+
 ## Optional GitHub
 
 Add githubLogin and an absolute ghPath to the target configuration before
