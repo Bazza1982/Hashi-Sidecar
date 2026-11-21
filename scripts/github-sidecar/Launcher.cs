@@ -38,8 +38,10 @@ internal static class Launcher
 
  static int Run(ProcessStartInfo info){
   info.RedirectStandardInput=true;info.RedirectStandardOutput=true;info.RedirectStandardError=true;
+  // Process uses Console.InputEncoding for its stdin writer; suppress its UTF-8 preamble.
+  try{Console.InputEncoding=new System.Text.UTF8Encoding(false);}catch(IOException){}
   using(Process p=Process.Start(info)){
-   var input=new System.Threading.Thread(()=>{try{Console.OpenStandardInput().CopyTo(p.StandardInput.BaseStream);}catch(IOException){}catch(ObjectDisposedException){}finally{try{p.StandardInput.Close();}catch(IOException){}catch(ObjectDisposedException){}}});
+   var input=new System.Threading.Thread(()=>{try{Console.OpenStandardInput().CopyTo(p.StandardInput.BaseStream);}catch(IOException){}catch(ObjectDisposedException){}finally{try{p.StandardInput.BaseStream.Close();}catch(IOException){}catch(ObjectDisposedException){}}});
    var output=new System.Threading.Thread(()=>{try{p.StandardOutput.BaseStream.CopyTo(Console.OpenStandardOutput());}catch(IOException){}catch(ObjectDisposedException){}});
    var error=new System.Threading.Thread(()=>{try{p.StandardError.BaseStream.CopyTo(Console.OpenStandardError());}catch(IOException){}catch(ObjectDisposedException){}});
    input.IsBackground=true;output.IsBackground=true;error.IsBackground=true;
