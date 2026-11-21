@@ -5,9 +5,11 @@ const [root,mode,helper,privilegedFile]=process.argv.slice(2);
 const path=join(root,mode);
 if(mode.endsWith('-child')){
  writeFileSync(path+'.json',JSON.stringify({pid:process.pid,ppid:process.ppid}));
+ let ready=false;
  const timer=setInterval(()=>{
   appendFileSync(path+'.effects','operation\n');
   if(privilegedFile)appendFileSync(privilegedFile,'privileged-operation\n');
+  if(!ready&&process.send){ready=true;process.send('ready');process.disconnect();}
  },100);
  setTimeout(()=>{clearInterval(timer);process.exit(0);},25000);
 }else{

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,existsSync,statSync,copyFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,statSync,copyFileSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
@@ -7,6 +7,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {enqueue} from '../scripts/github-user-sidecar.mjs';
 const [install,evidence,sid]=process.argv.slice(2);
 const read=p=>JSON.parse(readFileSync(p,'utf8').replace(/^\uFEFF/,''));
+const inheritedRoot=join(evidence,'inherited-launcher');
 const config=read(join(install,'data/config.json'));
 const legacy=read(join(install,'data/legacy/config.json'));
 const node=join(install,'runtime/node.exe'),cli=join(install,'bin/hashi-admin.exe');
@@ -17,7 +18,7 @@ function call(...args){const p=spawnSync(cli,args,{encoding:'utf8',windowsHide:t
 const readJson=s=>JSON.parse(s.replace(/^\uFEFF/,''));
 function task(name,action){ps(action+'-ScheduledTask -TaskName '+quote(name)+' | Out-Null'+(action==='Stop'?';$until=[DateTime]::UtcNow.AddSeconds(15);while((Get-ScheduledTask -TaskName '+quote(name)+').State -eq "Running"){if([DateTime]::UtcNow -gt $until){throw "Task did not stop"};Start-Sleep -Milliseconds 100}':''));}
 async function until(predicate){const end=Date.now()+15000;while(Date.now()<end){if(predicate())return;await delay(100);}throw Error('Fixture readiness timed out');}
-function processes(){const r=ps('Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and ($_.ExecutablePath.StartsWith('+quote(install+'\\')+') -or $_.ExecutablePath -eq '+quote(join(evidence,'fake-gh.exe'))+' -or ($_.Name -eq "node.exe" -and $_.CommandLine.Contains("worker-stop-probe.mjs") -and $_.CommandLine.Contains('+quote(evidence)+')))} | Select-Object ProcessId,ParentProcessId,ExecutablePath,CreationDate | ConvertTo-Json -Compress');const v=r?readJson(r):[];return Array.isArray(v)?v:[v];}
+function processes(){const r=ps('Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and ($_.ExecutablePath.StartsWith('+quote(install+'\\')+') -or $_.ExecutablePath.StartsWith('+quote(inheritedRoot+'\\')+') -or $_.ExecutablePath -eq '+quote(join(evidence,'fake-gh.exe'))+' -or ($_.Name -eq "node.exe" -and $_.CommandLine.Contains("worker-stop-probe.mjs") -and $_.CommandLine.Contains('+quote(evidence)+')))} | Select-Object ProcessId,ParentProcessId,ExecutablePath,CreationDate | ConvertTo-Json -Compress');const v=r?readJson(r):[];return Array.isArray(v)?v:[v];}
 function size(p){return existsSync(p)?statSync(p).size:0;}
 const taskNames=[...Object.values(config.profiles).filter(p=>p.available).map(p=>p.taskName),config.legacyTaskName];
 const scope=join(evidence,'scope.json');
@@ -48,7 +49,7 @@ try{
   const stoppedPrivilegedEffects=!observed.privilegedPath||size(observed.privilegedPath)===privilegedBefore;
   const survived=afterStop.length>0;
   // Stop only this explicit fixture's descendants; never match a bare process name.
-  if(survived){ps('Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and ($_.ExecutablePath.StartsWith('+quote(install+'\\')+') -or $_.ExecutablePath -eq '+quote(join(evidence,'fake-gh.exe'))+' -or ($_.Name -eq "node.exe" -and $_.CommandLine.Contains("worker-stop-probe.mjs") -and $_.CommandLine.Contains('+quote(evidence)+')))} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}');}
+  if(survived){ps('Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and ($_.ExecutablePath.StartsWith('+quote(install+'\\')+') -or $_.ExecutablePath.StartsWith('+quote(inheritedRoot+'\\')+') -or $_.ExecutablePath -eq '+quote(join(evidence,'fake-gh.exe'))+' -or ($_.Name -eq "node.exe" -and $_.CommandLine.Contains("worker-stop-probe.mjs") -and $_.CommandLine.Contains('+quote(evidence)+')))} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}');}
   const starts=size(base+'.starts');
   task(taskName,'Start');await delay(2000);
   const noReplay=size(base+'.starts')===starts;
@@ -57,6 +58,45 @@ try{
   rows.push(row);if(!row.passed)failures++;
   writeFileSync(join(evidence,'observations.json'),JSON.stringify(rows,null,2));
   console.log(JSON.stringify(row));
+ }
+
+
+ // Same GUI payload and true task principals, with a controlled Node entry that
+ // exits while a detached owned descendant retains one standard stream.
+ const inherited=join(evidence,'inherited-launcher');
+ for(const d of ['bin','runtime','releases/3.0.0-aaaaaaaaaaaa','compat'])mkdirSync(join(inherited,d),{recursive:true});
+ copyFileSync(join(install,'bin/hashi-admin-worker.exe'),join(inherited,'bin/hashi-admin-worker.exe'));
+ copyFileSync(node,join(inherited,'runtime/node.exe'));
+ writeFileSync(join(inherited,'installation.json'),JSON.stringify({releaseId:'3.0.0-aaaaaaaaaaaa',compatibility:true}));
+ const setting=join(inherited,'case.json'),moduleURL=new URL('./fixtures/inherited-worker.mjs',import.meta.url).href;
+ const script='import {run} from '+JSON.stringify(moduleURL)+';run('+JSON.stringify(setting)+');';
+ for(const file of ['releases/3.0.0-aaaaaaaaaaaa/cli.mjs','compat/github-user-sidecar.mjs'])writeFileSync(join(inherited,file),script);
+ for(const profile of ['system','user','user-admin','compat']){
+  const original=profile==='compat'?config.legacyTaskName:config.profiles[profile].taskName;
+  const name='HashiSidecar-test-inherited-'+randomUUID();
+  const args=profile==='compat'?'--compat':'--profile '+profile;
+  ps('$t=Get-ScheduledTask -TaskName '+quote(original)+';Register-ScheduledTask -TaskName '+quote(name)+' -Action (New-ScheduledTaskAction -Execute '+quote(join(inherited,'bin/hashi-admin-worker.exe'))+' -Argument '+quote(args)+') -Principal $t.Principal -Settings $t.Settings | Out-Null');
+  taskNames.push(name);
+  for(const stream of ['stdout','stderr']){
+   const directory=join(evidence,'inherited-'+profile+'-'+stream);mkdirSync(directory);
+   writeFileSync(setting,JSON.stringify({profile,stream,directory,helper,windowHelper:join(evidence,'window-witness.exe')}));
+   task(name,'Start');
+   const effects=join(directory,profile+'-child.effects');
+   await until(()=>size(effects)>0);
+   await until(()=>ps('[string](Get-ScheduledTask -TaskName '+quote(name)+').State')!=='Running');
+   const observed=read(join(directory,'parent.json')),window=read(join(directory,'window.json'));
+   assert.equal(window.consoleWindow,0);assert.equal(window.visible,false);
+   assert.equal(observed.identity.sid,profile==='system'?'S-1-5-18':sid);
+   assert.equal(observed.identity.elevated,profile==='system'||profile==='user-admin');
+   assert.equal(Number(ps('(Get-ScheduledTaskInfo -TaskName '+quote(name)+').LastTaskResult')),37);
+   const survivors=processes();assert.equal(survivors.length,0,'inherited-stream completion left an owned process');
+   const before=size(effects),privileged=observed.privilegedPath?size(observed.privilegedPath):0;
+   if(observed.privilegedPath)assert(privileged>0);else assert(observed.protectedWriteDenied);
+   await delay(1000);
+   assert.equal(size(effects),before);if(observed.privilegedPath)assert.equal(size(observed.privilegedPath),privileged);
+   const row={profile,stream,window,normalExit:37,survivors:[],stoppedEffects:true,stoppedPrivilegedEffects:true,identity:observed.identity,protectedWriteDenied:observed.protectedWriteDenied,passed:true};
+   rows.push(row);writeFileSync(join(evidence,'observations.json'),JSON.stringify(rows,null,2));console.log(JSON.stringify(row));
+  }
  }
 
  // A real SYSTEM task whose owned launcher cannot start Node must leave a

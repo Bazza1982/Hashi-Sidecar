@@ -1,4 +1,4 @@
-param(
+﻿param(
   [ValidateSet('Install','Audit','Upgrade')][string]$Mode='Audit',
   [Parameter(Mandatory=$true)][string]$InstallRoot,
   [string]$SeedConfig,
@@ -42,6 +42,7 @@ $assets=@{
   worker=(Join-Path $PSScriptRoot 'github-user-sidecar.mjs')
   launcher=(Join-Path $PSScriptRoot 'github-sidecar\launcher.mjs')
   nativeLauncher=(Join-Path $PSScriptRoot 'github-sidecar\Launcher.cs')
+  launcherProcess=(Join-Path $PSScriptRoot 'admin-sidecar\LauncherProcess.cs')
   package=(Join-Path $PSScriptRoot 'github-sidecar\package.json')
   guide=(Join-Path $PSScriptRoot 'github-sidecar\README.md')
   upgrade=(Join-Path $PSScriptRoot 'upgrade-shared-github-sidecar.ps1')
@@ -137,7 +138,7 @@ if ($Mode -eq 'Install' -and -not $existingManifest) {
   New-Item -ItemType Directory -Path $stage -Force | Out-Null
   Set-ApplicationAcl $stage $false '' $true
   try {
-    foreach ($folder in @('bin','runtime',('releases\'+$releaseId),'maintenance\github-sidecar','data')) {
+    foreach ($folder in @('bin','runtime',('releases\'+$releaseId),'maintenance\github-sidecar','maintenance\admin-sidecar','data')) {
       New-Item -ItemType Directory -Path (Join-Path $stage $folder) -Force | Out-Null
     }
     Set-ApplicationAcl (Join-Path $stage 'data') $true 'ReadAndExecute' $true
@@ -152,12 +153,12 @@ if ($Mode -eq 'Install' -and -not $existingManifest) {
     Copy-Item -LiteralPath $assets.launcher -Destination (Join-Path $stage 'bin\launcher.mjs')
     Copy-Item -LiteralPath $assets.guide -Destination (Join-Path $stage 'README.md')
     $maintenance=@{
-      worker='github-user-sidecar.mjs';launcher='github-sidecar\launcher.mjs';nativeLauncher='github-sidecar\Launcher.cs'
+      worker='github-user-sidecar.mjs';launcher='github-sidecar\launcher.mjs';nativeLauncher='github-sidecar\Launcher.cs';launcherProcess='admin-sidecar\LauncherProcess.cs'
       package='github-sidecar\package.json';guide='github-sidecar\README.md';installer='install-shared-github-sidecar.ps1';security='windows-security.ps1';upgrade='upgrade-shared-github-sidecar.ps1'
     }
     foreach ($entry in $maintenance.GetEnumerator()) { Copy-Item -LiteralPath $assets[$entry.Key] -Destination (Join-Path $stage ('maintenance\'+$entry.Value)) }
     $compiler=Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-    & $compiler /nologo /target:exe /platform:anycpu ('/out:'+(Join-Path $stage 'bin\hashi-github.exe')) $assets.nativeLauncher
+    & $compiler /nologo /target:exe /platform:anycpu ('/out:'+(Join-Path $stage 'bin\hashi-github.exe')) $assets.nativeLauncher $assets.launcherProcess
     if ($LASTEXITCODE -ne 0) { throw 'Native launcher compilation failed.' }
     $configuration=@{
       schemaVersion=1;installationId=$installationId;root=$data;userSid=$userSid.Value

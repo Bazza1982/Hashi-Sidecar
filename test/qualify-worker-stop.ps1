@@ -36,6 +36,8 @@ $fakePath=Join-Path $EvidenceRoot 'fake-gh.cs'
 $csc=Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 & $csc /nologo /target:exe (('/out:'+(Join-Path $EvidenceRoot 'fake-gh.exe'))) $fakePath
 if($LASTEXITCODE){throw 'Fixture compilation failed'}
+& $csc /nologo /target:exe (('/out:'+(Join-Path $EvidenceRoot 'window-witness.exe'))) (Join-Path $SourceRoot 'test\fixtures\WindowWitness.cs')
+if($LASTEXITCODE){throw 'Window witness compilation failed'}
 $install=Join-Path $EvidenceRoot 'install'
 @($node,$probe,$EvidenceRoot,(Join-Path $install 'bin\admin-native.exe'))|Set-Content (Join-Path $EvidenceRoot 'fixture-paths.txt') -Encoding UTF8
 $seed=@{schemaVersion=1;installationId=[guid]::NewGuid().ToString();root=$EvidenceRoot;userSid=$TargetSid;userProfile=$profile[0].LocalPath;expectedGitHubLogin='fixture';repositories=@('example/fixture');taskName='HashiHubV2-GitHubRead-fixture';taskPath='\';ghPath=(Join-Path $EvidenceRoot 'fake-gh.exe');gitPath=$node;workerPath=$probe;workerSHA256=('a'*64)}

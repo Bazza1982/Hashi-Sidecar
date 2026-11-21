@@ -85,9 +85,23 @@ unchanged. Interrupted claims are uncertain; task restart never replays them
 with a new UUID. No runtime polling loop, daemon or application-core change is
 needed.
 
+
+The worker and both native CLI launchers share direct standard-handle forwarding.
+Only inheritable duplicates of stdin/stdout/stderr are passed to CreateProcess;
+no proxy output pipe, EOF-dependent drain thread or post-exit join remains.
+CREATE_NO_WINDOW is preserved. A private job is established before Node starts,
+and its sole handle remains open until the launcher returns the captured Node
+exit status. Surviving descendants then end with that job, including detached
+ones holding stdout/stderr. The forwarding layer adds no post-exit timeout or truncation: bytes already
+written remain in the caller's kernel stream and drain normally. Existing
+operation output bounds are unchanged.
+A handle allowlist avoids leaking unrelated handles or a stdin writer that
+would prevent EOF. Absent Scheduled Task standard handles use NUL. No daemon,
+polling loop, watchdog or new service is introduced.
+
 Startup failures return exit code 2 and structured stderr with
 ADMIN_WORKER_LAUNCH_FAILED, a stage and a numeric Win32 error (zero when absent).
-Stages distinguish arguments, manifest, payload, job-create/configure/assign and
+Stages distinguish arguments, manifest, payload, job-create/configure/assign, stdio and
 node-start. Where the installed lane is writable, the launcher also records
 worker-startup.json under data/lanes/<actual-token-lane>/work, or
 data/legacy/work for a Limited compatibility token. SYSTEM/elevated diagnostics

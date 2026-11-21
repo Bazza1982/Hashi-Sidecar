@@ -9,6 +9,7 @@ const source=fileURLToPath(new URL('../scripts/',import.meta.url));
 const win=process.platform==='win32';
 function compile(output,files,gui=false){
  const csc=join(process.env.SystemRoot,'Microsoft.NET/Framework64/v4.0.30319/csc.exe');
+ if(files.some(f=>f.endsWith('Launcher.cs')))files=[...files,join(source,'admin-sidecar/LauncherProcess.cs')];
  const p=spawnSync(csc,['/nologo',gui?'/target:winexe':'/target:exe','/r:System.Web.Extensions.dll','/out:'+output,...files],{encoding:'utf8',windowsHide:true});
  assert.equal(p.status,0,p.stdout+p.stderr);
 }

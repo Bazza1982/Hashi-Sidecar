@@ -1,4 +1,4 @@
-param(
+﻿param(
  [ValidateSet('Install','Audit','Disable')][string]$Mode='Audit',
  [Parameter(Mandatory=$true)][string]$InstallRoot,
  [string]$SeedConfig,
@@ -40,7 +40,7 @@ if($root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')){throw 'Use a dedicated 
 $manifestPath=Join-Path $root 'installation.json';$configPath=Join-Path $root 'data\config.json'
 $source=Join-Path $PSScriptRoot 'admin-sidecar'
 $package=Get-Content -LiteralPath (Join-Path $source 'package.json') -Raw | ConvertFrom-Json
-$sourceNames=@('core.mjs','execute.mjs','cli.mjs','bootstrap.mjs','Native.cs','Launcher.cs','WorkerLauncher.cs','actions.ps1','maintenance.mjs','Maintenance.cs','package.json','README.md')
+$sourceNames=@('core.mjs','execute.mjs','cli.mjs','bootstrap.mjs','Native.cs','Launcher.cs','WorkerLauncher.cs','LauncherProcess.cs','actions.ps1','maintenance.mjs','Maintenance.cs','package.json','README.md')
 $sourcePins=@{};foreach($name in $sourceNames){$sourcePins[$name]=Hash (Join-Path $source $name)}
 $sourcePins['legacy-worker']=Hash (Join-Path $PSScriptRoot 'github-user-sidecar.mjs')
 $sourcePins['legacy-launcher']=Hash (Join-Path $PSScriptRoot 'github-sidecar\launcher.mjs')
@@ -109,9 +109,9 @@ if ($first) {
   if($LASTEXITCODE -ne 0){throw 'Native execution helper compilation failed.'}
   & $csc /nologo /target:exe /r:System.Web.Extensions.dll /r:System.Security.dll (('/out:'+(Join-Path $stage 'bin\maintenance-native.exe'))) (Join-Path $source 'Maintenance.cs')
   if($LASTEXITCODE -ne 0){throw 'Native maintenance helper compilation failed.'}
-  & $csc /nologo /target:exe (('/out:'+(Join-Path $stage 'bin\hashi-admin.exe'))) (Join-Path $source 'Launcher.cs')
+  & $csc /nologo /target:exe (('/out:'+(Join-Path $stage 'bin\hashi-admin.exe'))) (Join-Path $source 'Launcher.cs') (Join-Path $source 'LauncherProcess.cs')
   if($LASTEXITCODE -ne 0){throw 'Native client compilation failed.'}
-  & $csc /nologo /target:winexe /r:System.Web.Extensions.dll (('/out:'+(Join-Path $stage 'bin\hashi-admin-worker.exe'))) (Join-Path $source 'WorkerLauncher.cs')
+  & $csc /nologo /target:winexe /r:System.Web.Extensions.dll (('/out:'+(Join-Path $stage 'bin\hashi-admin-worker.exe'))) (Join-Path $source 'WorkerLauncher.cs') (Join-Path $source 'LauncherProcess.cs')
   if($LASTEXITCODE -ne 0){throw 'Windowless worker launcher compilation failed.'}
   foreach($name in $sourceNames){Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $stage ('maintenance\admin-sidecar\'+$name))}
   foreach($name in @('install-admin-sidecar.ps1','windows-security.ps1','github-user-sidecar.mjs')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $stage ('maintenance\'+$name))}

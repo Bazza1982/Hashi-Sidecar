@@ -98,3 +98,21 @@ private receipts. Interrupted effects still require reconciliation: killing a
 process cannot undo an operation already completed before stop. Passing the
 bounded checks does not prove arbitrary detached services, remote effects,
 third-party applications or all Windows versions.
+
+## Inherited standard streams
+
+inherited-pipes.test.mjs independently retains stdout and stderr in a detached
+owned Node descendant while the direct Node child exits with status 37. It tests
+all four worker routes and both CLI launchers, bounded launcher return, owned
+process cleanup and stopped effects. Separate large-output cases compare every
+byte on both CLI streams and preserve literal argv/UTF-8 stdin and exit status.
+A normal non-detached child is insufficient to reproduce this issue: Node's
+Windows child lifecycle can end it before the inherited-pipe problem appears.
+
+The opt-in real Scheduled Task harness also clones the actual four task
+principals into disposable launcher fixtures and independently exercises normal
+exit with stdout/stderr inheritance. It checks LastTaskResult=37, zero survivors,
+stopped ordinary/protected-lane writes, and the correct actual identities. These
+eight cases supplement the four existing forced-stop/no-replay cases and the
+startup-failure diagnostic case. All fixtures and observation timers are test
+only; no installed request is migrated or automatically replayed.
