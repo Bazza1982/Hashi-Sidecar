@@ -1,4 +1,4 @@
-param(
+﻿param(
  [ValidateSet('Install','Audit','Disable')][string]$Mode='Audit',
  [Parameter(Mandatory=$true)][string]$InstallRoot,
  [string]$AccountsFile,
@@ -111,7 +111,7 @@ if(-not $manifest){
    Copy-Item -LiteralPath $sourceFile.FullName -Destination $destination
   }
   $compiler=Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-  & $compiler /nologo /target:exe (('/out:'+(Join-Path $root 'bin\hashi-sidecar.exe'))) (Join-Path $PSScriptRoot 'admin-sidecar\Launcher.cs')
+  & $compiler /nologo /target:exe (('/out:'+(Join-Path $root 'bin\hashi-sidecar.exe'))) (Join-Path $PSScriptRoot 'admin-sidecar\Launcher.cs') (Join-Path $PSScriptRoot 'admin-sidecar\LauncherProcess.cs')
   if($LASTEXITCODE -ne 0){throw 'Standalone launcher compilation failed.'}
   $pins=@{}
   foreach($folder in @('bin','runtime','maintenance')){

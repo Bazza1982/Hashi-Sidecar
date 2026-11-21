@@ -49,12 +49,9 @@ internal static class Launcher
             foreach (string argument in args) arguments.Append(" ").Append(Quote(argument));
             ProcessStartInfo info = new ProcessStartInfo(node, arguments.ToString());
             info.UseShellExecute = false;
+            info.CreateNoWindow = true;
             info.WorkingDirectory = root;
-            using (Process process = Process.Start(info))
-            {
-                process.WaitForExit();
-                return process.ExitCode;
-            }
+            return LauncherProcess.Run(info);
         }
         catch
         {

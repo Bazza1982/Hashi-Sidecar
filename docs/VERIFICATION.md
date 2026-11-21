@@ -65,3 +65,54 @@ Private backups and detailed redacted audit reports are kept outside source.
 
 No hosted CI run, repository push/visibility change, existing installation update
 or production service restart is implied by local public-source preparation.
+
+## Scheduled worker stop regression
+
+Native source tests force termination of the windowless launcher for all four
+routes and verify that real Node children/grandchildren exit and effects stop.
+They also check normal exit/status preservation and sanitized startup errors.
+These routing tests use the caller's token; they do not claim four real account
+contexts.
+
+The separately invoked real-task harness installs a fresh, disposable low-level
+administration installation, with optional compatibility enabled against a local
+fake GitHub executable. It never reads credentials or calls the network:
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\test\qualify-worker-stop.ps1 -SourceRoot '<SourceRoot>' -EvidenceRoot '<FreshPrivateEvidenceRoot>' -RuntimeRoot '<PortableNodeRoot>' -TargetSid '<LoggedOnAdministratorSid>'
+```
+
+Run it from the actual SYSTEM/Session 0 service context with a logged-on
+administrator target. It observes SYSTEM, Limited user and elevated user tokens,
+and Limited compatibility execution. After Stop-ScheduledTask reports the task
+no longer Running, it checks for owned process survivors and ongoing disposable
+file effects (including writes to an installer-protected lane for elevated
+tokens, and denied writes from Limited tokens), then restarts the same task and verifies that the interrupted
+request is not executed again. A separate real task with an invalid Node image
+checks persisted startup diagnostics and LastTaskResult=2. Bounded observation
+waits and repeating effect probes exist only in this opt-in test harness; no
+polling or resident service is added to the runtime.
+
+It revokes its own grant and stops/disables only its own fixture tasks, retaining
+private receipts. Interrupted effects still require reconciliation: killing a
+process cannot undo an operation already completed before stop. Passing the
+bounded checks does not prove arbitrary detached services, remote effects,
+third-party applications or all Windows versions.
+
+## Inherited standard streams
+
+inherited-pipes.test.mjs independently retains stdout and stderr in a detached
+owned Node descendant while the direct Node child exits with status 37. It tests
+all four worker routes and both CLI launchers, bounded launcher return, owned
+process cleanup and stopped effects. Separate large-output cases compare every
+byte on both CLI streams and preserve literal argv/UTF-8 stdin and exit status.
+A normal non-detached child is insufficient to reproduce this issue: Node's
+Windows child lifecycle can end it before the inherited-pipe problem appears.
+
+The opt-in real Scheduled Task harness also clones the actual four task
+principals into disposable launcher fixtures and independently exercises normal
+exit with stdout/stderr inheritance. It checks LastTaskResult=37, zero survivors,
+stopped ordinary/protected-lane writes, and the correct actual identities. These
+eight cases supplement the four existing forced-stop/no-replay cases and the
+startup-failure diagnostic case. All fixtures and observation timers are test
+only; no installed request is migrated or automatically replayed.

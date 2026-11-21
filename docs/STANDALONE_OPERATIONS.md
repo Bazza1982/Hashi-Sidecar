@@ -59,6 +59,58 @@ cancellation, revocation or timeout ends the owned job. To start persistent work
 use an authorized Windows service/scheduler/application mechanism. An uncertain
 external outcome needs observation and reconciliation, not a new request UUID.
 
+## Windowless workers
+
+Scheduled account workers start through a Windows GUI-subsystem launcher and
+create the bundled Node process without a console. SYSTEM, user and user-admin
+profiles keep their existing tokens, job ownership, durable results and exit
+codes; the optional compatibility worker uses the same windowless entry.
+The command-line client still preserves redirected stdin/stdout/stderr and exit
+status. An explicitly requested process.run window=normal is unchanged: this
+setting controls the requested application, not the Sidecar worker.
+
+Existing installations remain immutable. Install the changed release in a fresh
+owned root, qualify its task actions and identities, then update the caller's
+discovery entry. Keep old jobs/results in their original installation; do not
+replace task definitions or cancel unrelated active requests to hide a console.
+
+
+The GUI launcher joins a private Windows Job Object before creating Node. The
+job disallows breakaway and has KILL_ON_JOB_CLOSE; its sole non-inherited handle
+belongs to the launcher until OS process exit. Stopping the Scheduled Task or
+abruptly terminating that launcher therefore ends Node and its descendants,
+including compatibility descendants. Normal launcher exit also closes the job.
+The existing per-operation native jobs, cancellation and request claims are
+unchanged. Interrupted claims are uncertain; task restart never replays them
+with a new UUID. No runtime polling loop, daemon or application-core change is
+needed.
+
+
+The worker and both native CLI launchers share direct standard-handle forwarding.
+Only inheritable duplicates of stdin/stdout/stderr are passed to CreateProcess;
+no proxy output pipe, EOF-dependent drain thread or post-exit join remains.
+CREATE_NO_WINDOW is preserved. A private job is established before Node starts,
+and its sole handle remains open until the launcher returns the captured Node
+exit status. Surviving descendants then end with that job, including detached
+ones holding stdout/stderr. The forwarding layer adds no post-exit timeout or truncation: bytes already
+written remain in the caller's kernel stream and drain normally. Existing
+operation output bounds are unchanged.
+A handle allowlist avoids leaking unrelated handles or a stdin writer that
+would prevent EOF. Absent Scheduled Task standard handles use NUL. No daemon,
+polling loop, watchdog or new service is introduced.
+
+Startup failures return exit code 2 and structured stderr with
+ADMIN_WORKER_LAUNCH_FAILED, a stage and a numeric Win32 error (zero when absent).
+Stages distinguish arguments, manifest, payload, job-create/configure/assign, stdio and
+node-start. Where the installed lane is writable, the launcher also records
+worker-startup.json under data/lanes/<actual-token-lane>/work, or
+data/legacy/work for a Limited compatibility token. SYSTEM/elevated diagnostics
+never select a Limited user's writable lane from command-line arguments.
+Messages/arguments/credential content are not copied from the exception.
+This file describes the last failure, not current health: inspect its timestamp
+and the Scheduled Task LastTaskResult together. If diagnostic storage is
+unavailable, stderr and the nonzero task result remain the fallback.
+
 ## Optional GitHub
 
 Add githubLogin and an absolute ghPath to the target configuration before

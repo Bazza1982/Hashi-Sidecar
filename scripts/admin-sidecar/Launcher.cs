@@ -11,7 +11,7 @@ internal static class Launcher {
  string root=Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"..")),node=Path.Combine(root,"runtime","node.exe"),entry=Path.Combine(root,"bin","launcher.mjs");
  if(!File.Exists(node)||!File.Exists(entry))throw new InvalidOperationException();
  StringBuilder a=new StringBuilder(Quote(entry));foreach(string s in args)a.Append(" ").Append(Quote(s));
- ProcessStartInfo info=new ProcessStartInfo(node,a.ToString()){UseShellExecute=false,WorkingDirectory=root};
- using(Process p=Process.Start(info)){p.WaitForExit();return p.ExitCode;}
+ ProcessStartInfo info=new ProcessStartInfo(node,a.ToString()){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=root};
+ return LauncherProcess.Run(info);
  }catch{Console.Error.WriteLine("{\"ok\":false,\"error\":{\"code\":\"ADMIN_LAUNCH_FAILED\"}}");return 2;}}
 }

@@ -65,7 +65,7 @@ test('native GitHub executable preserves argv literally and runs independently o
   assert.equal(existsSync(compiler), true, 'Windows C# compiler required for the native launcher check');
   const exe = join(f.root, 'bin/hashi-github.exe');
   rmSync(exe);
-  const compile = spawnSync(compiler, ['/nologo','/target:exe','/platform:anycpu','/out:' + exe, source], { encoding: 'utf8', windowsHide: true });
+  const compile = spawnSync(compiler, ['/nologo','/target:exe','/platform:anycpu','/out:' + exe, source, fileURLToPath(new URL('../scripts/admin-sidecar/LauncherProcess.cs', import.meta.url))], { encoding: 'utf8', windowsHide: true });
   assert.equal(compile.status, 0, compile.stdout + compile.stderr);
   copyFileSync(process.execPath, join(f.root, 'runtime/node.exe'));
   writeFileSync(join(f.root, 'bin/launcher.mjs'), 'console.log(JSON.stringify({argv:process.argv.slice(2),cwd:process.cwd()}));');
