@@ -58,9 +58,11 @@ if(Test-Path -LiteralPath $manifestPath){
   if((@($requested.targets.sid | Sort-Object) -join ',') -ne (@($manifest.targets.sid | Sort-Object) -join ',')){throw 'Account enrollment differs; prepare a separate owned installation.'}
   foreach($target in @($requested.targets)){
    $registered=Get-Content -LiteralPath (OwnedPath $root ('accounts/'+$target.sid+'/data/config.json')) -Raw | ConvertFrom-Json
-   foreach($field in @(@('githubLogin','expectedGitHubLogin'),@('ghPath','ghPath'))){
+   foreach($field in @(@('githubLogin','expectedGitHubLogin'),@('ghPath','ghPath'),@('gitCredentialGit','gitCredentialGit'),@('gitCredentialHelper','gitCredentialHelper'))){
     $value=if($target.PSObject.Properties.Name -contains $field[0]){[string]$target.($field[0])}else{''}
-    if($value -ne [string]$registered.($field[1])){throw 'Account adapter configuration differs; no repair was attempted.'}
+    $existing=if($registered.PSObject.Properties.Name -contains $field[1]){[string]$registered.($field[1])}else{''}
+    if($value -and $field[0] -in @('gitCredentialGit','gitCredentialHelper')){$value=LocalPath $value}
+    if($value -ne $existing){throw 'Account adapter configuration differs; no repair was attempted.'}
    }
    foreach($field in @('publisherSids','issuerSids')){
     $principals=if($requested.PSObject.Properties.Name -contains $field){@($requested.$field)}elseif($field -eq 'issuerSids' -and $requested.PSObject.Properties.Name -contains 'publisherSids'){@($requested.publisherSids)}else{@('S-1-5-18')}
@@ -88,7 +90,7 @@ if(-not $manifest){
   $targets=@($spec.targets)
   if($targets.Count -lt 1 -or @($targets.sid | Select-Object -Unique).Count -ne $targets.Count){throw 'Select distinct explicit target SIDs.'}
   foreach($target in $targets){
-   if(@($target.PSObject.Properties.Name | Where-Object {$_ -notin @('sid','githubLogin','ghPath')}).Count -or [string]$target.sid -notmatch '^S-1-5-21-(\d+-){2,}\d+$'){throw 'Invalid account selection.'}
+   if(@($target.PSObject.Properties.Name | Where-Object {$_ -notin @('sid','githubLogin','ghPath','gitCredentialGit','gitCredentialHelper')}).Count -or [string]$target.sid -notmatch '^S-1-5-21-(\d+-){2,}\d+$'){throw 'Invalid account selection.'}
    $verified=[Security.Principal.SecurityIdentifier]::new([string]$target.sid)
    $null=$verified.Translate([Security.Principal.NTAccount])
    $null=Get-LocalUser -SID $verified -ErrorAction Stop
@@ -127,6 +129,9 @@ if(-not $manifest){
    $arguments=@{Mode='Install';InstallRoot=$accountRoot;RuntimeRoot=(Join-Path $root 'runtime');TargetSid=[string]$target.sid;PublisherSid=@($spec.publisherSids);IssuerSid=@($spec.issuerSids)}
    if($target.PSObject.Properties.Name -contains 'githubLogin'){$arguments.GitHubLogin=[string]$target.githubLogin}
    if($target.PSObject.Properties.Name -contains 'ghPath'){$arguments.GhPath=[string]$target.ghPath}
+   foreach($field in @('GitCredentialGit','GitCredentialHelper')){
+    if($target.PSObject.Properties.Name -contains $field){$arguments[$field]=[string]$target.$field}
+   }
    & (Join-Path $PSScriptRoot 'install-admin-sidecar.ps1') @arguments
    $config=Get-Content -LiteralPath (Join-Path $accountRoot 'data\config.json') -Raw | ConvertFrom-Json
    if($config.userSid -ne $target.sid){throw 'Target identity mismatch.'}

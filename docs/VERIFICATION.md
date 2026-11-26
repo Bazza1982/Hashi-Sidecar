@@ -15,7 +15,7 @@ The suite covers:
 - Grant binding, capabilities, actual principals and disabled/unavailable profiles.
 - Immutable requests, conflicting IDs, reopened results, duplicate delivery and revocation.
 - Explicit target routing, configuration/installation substitution and cross-target grants.
-- Optional GitHub, failure classification and guarded publication/metadata operations.
+- Optional GitHub, managed credential account checks, redirect and credential containment, failure classification and guarded publication/metadata operations.
 - Native Windows token/DPAPI, job ownership, cancellation, timeout and output bounds.
 - Native ACL planning/conditional restore, file identity and stale-state rejection.
 - OS session observation and separate target/profile environments.

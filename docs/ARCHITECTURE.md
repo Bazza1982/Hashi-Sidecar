@@ -32,9 +32,7 @@ separate Agent authentication. A HASHI adapter must continue to obey its managed
 task/tool authority. This product can also be called by other authorized clients.
 
 GitHub configuration is optional per target. Windows-only installations contain
-no active compatibility worker/configuration or GitHub CLI dependency. Explicit
-GitHub enrollment adds github.request/graphql through that target's existing CLI
-credential store and expected account identity. The old finite GitHub interface
+no active compatibility worker/configuration or GitHub CLI dependency. Explicit GitHub enrollment adds github.request/graphql through a pinned Windows Git credential helper in the SYSTEM lane or the target's existing CLI credential store in an interactive lane. Both verify the configured identity. The old finite GitHub interface
 can still be installed with an explicit optional legacy seed using the low-level
 installer. Neither path requires Hub to run or import Hub modules.
 

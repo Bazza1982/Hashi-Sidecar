@@ -4,6 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 export const operations=Object.freeze(['identity','process.run','script.run','file.read','file.write','file.list','github.request','github.graphql','service.query','service.control','registry.read','registry.write','task.query','task.control','task.restart','acl.inspect','acl.plan','acl.apply','acl.restore','file.probe','process.inspect','process.stop']);
 export const profiles=Object.freeze(['system','user','user-admin']);
+export const processOutputLimit = 128 * 1024;
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const sid=/^S-1-(?:\d+-)*\d+$/;
 export const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -21,7 +22,12 @@ export function validateConfig(c){
  for(const p of profiles){const v=c.profiles?.[p];if(!v||v.sid!==(p==='system'?'S-1-5-18':c.userSid)||v.elevated!==(p!=='user')||(v.available!==undefined&&typeof v.available!=='boolean'))fail('ADMIN_CONFIG_REJECTED');}
  if(c.githubEnabled!==undefined&&typeof c.githubEnabled!=='boolean')fail('ADMIN_CONFIG_REJECTED');
  if(c.compatibilityEnabled!==undefined&&typeof c.compatibilityEnabled!=='boolean')fail('ADMIN_CONFIG_REJECTED');
- if(c.githubEnabled===true&&(!path(c.ghPath)||!text(c.expectedGitHubLogin,256)||!c.expectedGitHubLogin))fail('ADMIN_CONFIG_REJECTED');
+ const managedGitHub = Boolean(c.gitCredentialHelper || c.gitCredentialGit || c.gitCredentialHelperSha256);
+ if (managedGitHub && (c.githubEnabled !== true || c.ghPath || !path(c.gitCredentialGit) ||
+   !/^[A-Za-z]:[\\/][A-Za-z0-9_./\\ -]+\.cmd$/i.test(c.gitCredentialHelper || '') ||
+   !/^[a-f0-9]{64}$/.test(c.gitCredentialHelperSha256 || ''))) fail('ADMIN_CONFIG_REJECTED');
+ if (c.githubEnabled === true && ((!managedGitHub && !path(c.ghPath)) ||
+   !/^[A-Za-z0-9-]{1,39}$/.test(c.expectedGitHubLogin || ''))) fail('ADMIN_CONFIG_REJECTED');
  if(c.profiles.system.available===false)fail('ADMIN_CONFIG_REJECTED');
  noLinks(c.root);return c;
 }
@@ -99,8 +105,11 @@ export function authorize(c,g,r,identity,{now=Date.now()}={}){
  if(r.operation.startsWith('acl.')&&r.operation!=='acl.inspect'&&r.profile==='user')fail('ADMIN_PROFILE_REJECTED');
  if(r.operation==='task.restart'&&r.input.processGuards?.length&&!g.capabilities.includes('process'))fail('ADMIN_GRANT_REJECTED');
  if(['process.run','script.run'].includes(r.operation)&&g.allowAnyCode!==true)fail('ADMIN_CODE_SCOPE_REJECTED');
- if(r.operation.startsWith('github.')&&r.profile!=='user'&&r.profile!=='user-admin')fail('ADMIN_PROFILE_REJECTED');
+ if (r.operation.startsWith('github.') && !githubProfiles(c).includes(r.profile)) fail('ADMIN_PROFILE_REJECTED');
  return g;
+}
+export function githubProfiles(c) {
+ return c.gitCredentialHelper ? ['system'] : ['user', 'user-admin'];
 }
 export function createGrant(c,input,identity){
  validateConfig(c);issuer(c,identity);keys(input,['task','profiles','capabilities','callerSids','durationSeconds','allowAnyCode','pathRoots']);
@@ -112,6 +121,7 @@ export function createGrant(c,input,identity){
  (input.pathRoots!==undefined&&(!Array.isArray(input.pathRoots)||!input.pathRoots.length||input.pathRoots.length>64||input.pathRoots.some(x=>!path(x)))))fail('ADMIN_GRANT_REJECTED');
  if(input.profiles.some(p=>c.profiles[p].available===false))fail('ADMIN_PROFILE_UNAVAILABLE');
  if(input.capabilities.includes('github')&&c.githubEnabled===false)fail('ADMIN_GITHUB_UNAVAILABLE');
+ if (input.capabilities.includes('github') && !input.profiles.some(profile => githubProfiles(c).includes(profile))) fail('ADMIN_PROFILE_REJECTED');
  const now=Date.now(),g={schemaVersion:2,id:randomUUID(),installationId:c.installationId,machine:c.machine,...input,issuedAt:now,expiresAt:now+input.durationSeconds*1000,issuedBy:identity.sid};
  writeFileSync(inside(c.root,'grants',g.id+'.json'),JSON.stringify(g)+'\n',{flag:'wx'});return g;
 }
