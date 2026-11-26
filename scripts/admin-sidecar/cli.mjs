@@ -83,7 +83,7 @@ async function main(){
  authorization:'protected reusable task grant; optional typed path roots; explicit full-code capability for arbitrary administrator execution',
  maintenance:{aclPlans:true,conditionalRollback:true,credentialContentExport:false,processPidGuards:true,maxExecutionMs:86400000},
  targetSid:c.userSid,
- github:{available:c.githubEnabled!==false,host:'github.com',expectedLogin:c.expectedGitHubLogin,scope:'full authenticated account API rights, subject to actual GitHub token/role permissions'},
+ github:{available:c.githubEnabled!==false,host:'github.com',expectedLogin:c.expectedGitHubLogin,provider:c.gitCredentialHelper?'managed-git-credential':'github-cli',scope:'full authenticated account API rights, subject to actual GitHub token/role permissions'},
  legacy:c.compatibilityEnabled===false?{available:false}:{available:true,entry:join(root,'compat'),operations:(await import(pathToFileURL(join(root,'compat','github-user-sidecar.mjs')).href)).supportedOperations()},requiresLoggedOnUser:'user and user-admin only'},null,2));return;
  }
  publisher(c,who);

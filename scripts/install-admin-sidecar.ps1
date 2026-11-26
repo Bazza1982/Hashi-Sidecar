@@ -7,7 +7,9 @@
  [string[]]$PublisherSid=@('S-1-5-18'),
  [string[]]$IssuerSid,
  [string]$GitHubLogin,
- [string]$GhPath
+ [string]$GhPath,
+ [string]$GitCredentialGit,
+ [string]$GitCredentialHelper
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
@@ -40,7 +42,7 @@ if($root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')){throw 'Use a dedicated 
 $manifestPath=Join-Path $root 'installation.json';$configPath=Join-Path $root 'data\config.json'
 $source=Join-Path $PSScriptRoot 'admin-sidecar'
 $package=Get-Content -LiteralPath (Join-Path $source 'package.json') -Raw | ConvertFrom-Json
-$sourceNames=@('core.mjs','execute.mjs','cli.mjs','bootstrap.mjs','Native.cs','Launcher.cs','WorkerLauncher.cs','LauncherProcess.cs','actions.ps1','maintenance.mjs','Maintenance.cs','package.json','README.md')
+$sourceNames=@('core.mjs','execute.mjs','github-token.mjs','cli.mjs','bootstrap.mjs','Native.cs','Launcher.cs','WorkerLauncher.cs','LauncherProcess.cs','actions.ps1','maintenance.mjs','Maintenance.cs','package.json','README.md')
 $sourcePins=@{};foreach($name in $sourceNames){$sourcePins[$name]=Hash (Join-Path $source $name)}
 $sourcePins['legacy-worker']=Hash (Join-Path $PSScriptRoot 'github-user-sidecar.mjs')
 $sourcePins['legacy-launcher']=Hash (Join-Path $PSScriptRoot 'github-sidecar\launcher.mjs')
@@ -57,7 +59,7 @@ if ($first) {
  if($LASTEXITCODE -ne 0 -or $runtimeVersion -notmatch '^v(22|24)\.') {throw 'Supported portable Node 22 or 24 is required.'}
  $compatibilityEnabled=[bool]$SeedConfig
  if ($SeedConfig) {
-  if ($TargetSid) { throw 'Use TargetSid or the optional legacy seed, not both.' }
+  if ($TargetSid -or $GitCredentialGit -or $GitCredentialHelper) { throw 'Use explicit enrollment or the optional legacy seed, not both.' }
   Assert-Local $SeedConfig
   $seed=Get-Content -LiteralPath $SeedConfig -Raw | ConvertFrom-Json
  } else {
@@ -69,8 +71,17 @@ if ($first) {
   $profilePath=if($observedProfiles.Count -eq 1){[string]$observedProfiles[0].LocalPath}else{''}
   $seed=[pscustomobject]@{userSid=$verifiedSid.Value;userProfile=$profilePath;expectedGitHubLogin=$GitHubLogin;ghPath=$GhPath;gitPath=''}
  }
- $githubEnabled=([bool]$seed.ghPath -and [bool]$seed.expectedGitHubLogin)
- if (([bool]$seed.ghPath) -ne ([bool]$seed.expectedGitHubLogin)) { throw 'GitHub requires both an explicit CLI path and expected login.' }
+ $managedGitHub=[bool]($GitCredentialGit -or $GitCredentialHelper)
+ if($managedGitHub -and ($seed.ghPath -or $GitCredentialGit -notmatch '^[A-Za-z]:[\\/].*\.exe$' -or
+    $GitCredentialHelper -notmatch '^[A-Za-z]:[\\/][A-Za-z0-9_./\\ -]+\.cmd$')){
+  throw 'GitHub needs an absolute Git executable and an absolute trusted credential helper, without a CLI adapter.'
+ }
+ $hasGitHubProvider=([bool]$seed.ghPath -or $managedGitHub)
+ if($hasGitHubProvider -ne [bool]$seed.expectedGitHubLogin -or
+    ($hasGitHubProvider -and $seed.expectedGitHubLogin -notmatch '^[A-Za-z0-9-]{1,39}$')){
+  throw 'GitHub needs an explicit provider and expected login.'
+ }
+ $githubEnabled=$hasGitHubProvider
  if (-not $IssuerSid) {$IssuerSid=$PublisherSid}
  $PublisherSid=@($PublisherSid | ForEach-Object {[Security.Principal.SecurityIdentifier]::new($_).Value})
  $IssuerSid=@($IssuerSid | ForEach-Object {[Security.Principal.SecurityIdentifier]::new($_).Value})
@@ -83,9 +94,10 @@ if ($first) {
  $profileAvailable=($profile.Count -eq 1 -and [bool]$seed.userProfile)
  if ($profileAvailable -and [IO.Path]::GetFullPath([string]$profile[0].LocalPath) -ne [IO.Path]::GetFullPath([string]$seed.userProfile)) { throw 'Selected Windows profile registration changed.' }
  $administrator=@(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | Where-Object {$_.SID.Value -eq $script:userSid.Value}).Count -eq 1
- if ($githubEnabled -and -not $profileAvailable) { throw 'GitHub requires an existing target-user profile.' }
+ if ($seed.ghPath -and -not $profileAvailable) { throw 'GitHub requires an existing target-user profile.' }
  $dependencies=@((Join-Path $RuntimeRoot 'node.exe'),(Join-Path $RuntimeRoot 'LICENSE'))
- if($githubEnabled){$dependencies+=@($seed.ghPath)}
+ if($seed.ghPath){$dependencies+=@($seed.ghPath)}
+ if($managedGitHub){$dependencies+=@($GitCredentialGit,$GitCredentialHelper)}
  if($compatibilityEnabled){$dependencies+=@($seed.gitPath)}
  foreach($path in $dependencies){Assert-Local $path;if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw 'Verified dependency unavailable.'}}
  $id=[guid]::NewGuid().ToString();$suffix=$id.Substring(0,12)
@@ -95,7 +107,7 @@ if ($first) {
   PrivateAcl $stage 'ReadAndExecute' $true
   foreach($p in @('bin','runtime',('releases\'+$releaseId),'compat','maintenance','maintenance\admin-sidecar','maintenance\github-sidecar','data')){New-Item -ItemType Directory -Path (Join-Path $stage $p) -Force | Out-Null}
   $release=Join-Path $stage ('releases\'+$releaseId)
-  foreach($name in @('core.mjs','execute.mjs','cli.mjs','actions.ps1','maintenance.mjs')){Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $release $name)}
+  foreach($name in @('core.mjs','execute.mjs','github-token.mjs','cli.mjs','actions.ps1','maintenance.mjs')){Copy-Item -LiteralPath (Join-Path $source $name) -Destination (Join-Path $release $name)}
   Copy-Item -LiteralPath (Join-Path $source 'bootstrap.mjs') -Destination (Join-Path $stage 'bin\launcher.mjs')
   if($compatibilityEnabled){
    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'github-user-sidecar.mjs') -Destination (Join-Path $stage 'compat\github-user-sidecar.mjs')
@@ -131,7 +143,12 @@ if ($first) {
     publisherSids=@($PublisherSid);issuerSids=@($IssuerSid);githubEnabled=$githubEnabled;compatibilityEnabled=$compatibilityEnabled;expectedGitHubLogin=$seed.expectedGitHubLogin;ghPath=$seed.ghPath;gitPath=$seed.gitPath;
     nodePath=(Join-Path $root 'runtime\node.exe');helperPath=(Join-Path $root 'bin\admin-native.exe');workerPath=(Join-Path $root ('releases\'+$releaseId+'\cli.mjs'));actionsPath=(Join-Path $root ('releases\'+$releaseId+'\actions.ps1'));
     powershellPath=(Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe');profiles=$profiles;legacyTaskName=('HashiHubV2-GitHubRead-admin-'+$suffix)}
-  $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $stage 'data\config.json') -Encoding utf8
+  if($managedGitHub){
+    $config.gitCredentialGit=[IO.Path]::GetFullPath($GitCredentialGit)
+    $config.gitCredentialHelper=[IO.Path]::GetFullPath($GitCredentialHelper)
+    $config.gitCredentialHelperSha256=Hash $GitCredentialHelper
+   }
+   $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $stage 'data\config.json') -Encoding utf8
   PrivateAcl (Join-Path $stage 'data\config.json') 'Read'
   if($compatibilityEnabled){
   $legacy=$seed | ConvertTo-Json -Depth 20 | ConvertFrom-Json

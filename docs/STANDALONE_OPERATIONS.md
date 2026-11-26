@@ -7,7 +7,7 @@ account configuration. A target without a Windows profile can be enrolled for
 SYSTEM maintenance; enroll a fresh installation after its first login to add the
 new user context. Targets and payloads are pinned for each installation.
 
-The configuration accepts targets (each has sid and optional githubLogin/ghPath),
+The configuration accepts targets (each has sid and optional GitHub provider fields),
 publisherSids and issuerSids. Unknown target fields and duplicate SIDs are rejected.
 Configured service publishers must actually run as SYSTEM or an elevated
 administrator. Default publishers/issuers contain SYSTEM only; add an explicitly
@@ -113,11 +113,31 @@ unavailable, stderr and the nonzero task result remain the fallback.
 
 ## Optional GitHub
 
-Add githubLogin and an absolute ghPath to the target configuration before
-installation. This selects the user's existing GitHub CLI keyring and verifies
-the expected login on API use. No credential is exported or copied. A missing
-adapter reports ADMIN_GITHUB_UNAVAILABLE; Windows installation works without gh,
-git, an old Sidecar or Hub.
+Choose one provider per enrolled target and configure its expected `githubLogin`.
+
+- Managed credential: set `gitCredentialGit` to the absolute Windows Git
+  executable and `gitCredentialHelper` to the absolute path of an already
+  provisioned, administrator-controlled `.cmd` credential helper. Installation
+  pins the helper file hash. The Sidecar uses the `system` profile for
+  `github.request` and `github.graphql`. No interactive user session or GitHub
+  CLI login is required. Each operation verifies the expected GitHub login with
+  the same credential that sends the request. Credentials stay in the protected
+  helper/API subprocess and travel only to the fixed GitHub HTTPS host.
+- Interactive compatibility: set `ghPath` to the absolute GitHub CLI executable
+  and use the enrolled user's `user` profile. The user's existing GitHub CLI
+  credential store and interactive session are required.
+
+Create a task grant for the selected profile and `github` capability. Routine Git
+clone, fetch and push use normal Git with the configured credential helper. PR,
+repository API and GitHub Actions management use the REST/GraphQL operations.
+Actions permission is granted by GitHub and may differ for reading runs and
+dispatching or canceling them. A successful listing proves read access only.
+The managed provider reports redirects without following them or exposing signed
+locations. Archive/log/artifact downloads that require a separate signed URL
+are outside this provider's supported operations.
+
+A missing adapter reports ADMIN_GITHUB_UNAVAILABLE. Windows-only installation
+works without Git, GitHub CLI, an old Sidecar or Hub.
 
 The old finite GitHub command interface is retained as an explicit compatibility
 option through scripts/install-admin-sidecar.ps1 -SeedConfig with a reviewed

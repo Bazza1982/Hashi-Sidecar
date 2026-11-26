@@ -10,8 +10,7 @@ provides explicit execution routes for those different contexts.
 
 For example, a service agent can inspect a service as SYSTEM, repair a selected
 user's application settings as that user, or run an installer as a selected
-administrator. It can also use that user's existing GitHub CLI login when the
-optional GitHub adapter is configured.
+administrator. The optional GitHub adapter can use a managed machine credential or the selected user's existing GitHub CLI login.
 
 Sidecar is a standalone native CLI backed by on-demand Windows Task Scheduler
 workers. It bundles the Node runtime supplied at installation, opens no network
@@ -25,7 +24,7 @@ Other authorized automation clients can use the same CLI.
 - Keep one reusable grant for an approved task, with revocation, timeout and cancellation.
 - Save requests/results across caller restarts and reject conflicting request IDs.
 - Route multiple local accounts by explicit Windows SID, with separate protected stores.
-- Optionally call GitHub REST/GraphQL using a target user's existing CLI credential store.
+- Optionally call GitHub REST/GraphQL using an explicitly enrolled Windows Git credential helper or GitHub CLI.
 
 | Profile | Runs as | Typical use | Requirements |
 | --- | --- | --- | --- |
@@ -64,8 +63,7 @@ must not be used to repeat an effect blindly.
 - A portable Node 22 or 24 directory containing node.exe and its LICENSE.
 - Explicit local Windows user SIDs; a target must be logged on for user execution.
 
-The source has no npm dependencies, so npm install is unnecessary. GitHub CLI is
-needed only for the optional GitHub adapter. Domain/nested-group policy and
+The source has no npm dependencies, so npm install is unnecessary. The selected optional GitHub provider determines whether Git or GitHub CLI is required. Domain/nested-group policy and
 specific third-party GUI workflows require separate qualification.
 
 ## Quick start

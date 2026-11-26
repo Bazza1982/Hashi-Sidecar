@@ -70,6 +70,36 @@ function githubCall(c,r,ctx,method,endpoint,body){
  let data;try{data=JSON.parse(http.body);}catch{data=http.body;}
  return {status:status||200,headers:http.headers,data,complete:!http.headers.link};
 }
+function managedGitHubCall(c, r, ctx) {
+ const graph = r.operation === 'github.graphql';
+ const method = graph ? 'POST' : r.input.method;
+ const endpoint = graph ? 'graphql' : githubEndpoint(r.input.path);
+ const body = graph ? {query:r.input.query,variables:r.input.variables||{}} : r.input.body;
+ const run = runProcess(c, r, ctx, {
+   executable:c.nodePath, args:[join(dirname(c.workerPath), 'github-token.mjs')], cwd:c.root,
+   stdin:JSON.stringify({method,endpoint,body,expectedLogin:c.expectedGitHubLogin,
+     gitCredentialHelper:c.gitCredentialHelper,gitCredentialHelperSha256:c.gitCredentialHelperSha256,
+     gitCredentialGit:c.gitCredentialGit}), timeoutMs:70000,
+ });
+ const write = method !== 'GET';
+ if (run.exitCode !== 0 || run.stdoutTruncated) fail(write ? 'ADMIN_OUTCOME_UNCERTAIN' : 'ADMIN_SIZE_REJECTED');
+ let response;
+ try { response = JSON.parse(run.stdout); } catch {
+   fail(write ? 'ADMIN_OUTCOME_UNCERTAIN' : 'ADMIN_UPSTREAM_REJECTED');
+ }
+ if (response.error === 'account_mismatch') fail('ADMIN_GITHUB_ACCOUNT_MISMATCH');
+ if (response.error === 'credential_unavailable') fail('ADMIN_UPSTREAM_REJECTED',{reason:'AUTHENTICATION_REQUIRED'});
+ if (response.error === 'preflight_failure' || response.error === 'endpoint_rejected') fail('ADMIN_UPSTREAM_REJECTED');
+ const status = response.status;
+ if (response.error || !Number.isInteger(status) || status >= 300) {
+   if (write && !response.preflight && (!status || status === 408 || status >= 500 || status < 400)) fail('ADMIN_OUTCOME_UNCERTAIN');
+   fail('ADMIN_UPSTREAM_REJECTED',{httpStatus:status,reason:status===401?'AUTHENTICATION_REQUIRED':status===403?'PERMISSION_DENIED':status===404?'NOT_FOUND':status===422?'VALIDATION_REJECTED':status===429?'RATE_LIMITED':undefined});
+ }
+ let data;
+ try { data = JSON.parse(response.body); } catch { data = response.body; }
+ if (graph && data?.errors?.length) fail('ADMIN_OUTCOME_UNCERTAIN');
+ return {status,headers:response.headers,data,complete:!response.headers.link};
+}
 export function executeOperation(c,r,ctx,{identity=()=>nativeIdentity(c)}={}){
  validateOperation(r);if(r.operation==='identity')return identity();
  if(r.operation.startsWith('acl.')||['file.probe','process.inspect','process.stop'].includes(r.operation))return maintenanceOperation(c,r,ctx);
@@ -85,6 +115,7 @@ export function executeOperation(c,r,ctx,{identity=()=>nativeIdentity(c)}={}){
  }
  if(r.operation.startsWith('github.')){
  if(c.githubEnabled===false)fail('ADMIN_GITHUB_UNAVAILABLE');
+ if (c.gitCredentialHelper) return managedGitHubCall(c, r, ctx);
  const account=githubCall(c,r,ctx,'GET','user');
  if(account.data?.login?.toLowerCase()!==c.expectedGitHubLogin.toLowerCase())fail('ADMIN_GITHUB_ACCOUNT_MISMATCH');
  if(r.operation==='github.graphql'){
