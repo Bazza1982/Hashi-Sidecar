@@ -4,6 +4,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 export const operations=Object.freeze(['identity','process.run','script.run','file.read','file.write','file.list','github.request','github.graphql','service.query','service.control','registry.read','registry.write','task.query','task.control','task.restart','acl.inspect','acl.plan','acl.apply','acl.restore','file.probe','process.inspect','process.stop']);
 export const profiles=Object.freeze(['system','user','user-admin']);
+export const processOutputLimit = 128 * 1024;
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const sid=/^S-1-(?:\d+-)*\d+$/;
 export const sha=value=>createHash('sha256').update(value).digest('hex');

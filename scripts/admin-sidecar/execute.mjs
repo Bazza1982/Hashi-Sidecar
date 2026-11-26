@@ -1,7 +1,7 @@
 import {readFileSync,writeFileSync,existsSync,lstatSync,readdirSync,renameSync,mkdirSync} from 'node:fs';
 import {join,dirname,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {fail,noLinks,inside,sha,redact,validateOperation,githubEndpoint} from './core.mjs';
+import {fail,noLinks,inside,sha,redact,validateOperation,githubEndpoint,processOutputLimit} from './core.mjs';
 import {maintenanceOperation} from './maintenance.mjs';
 export function nativeIdentity(c){
  const p=spawnSync(c.helperPath,['identity'],{encoding:'utf8',windowsHide:true,timeout:10000,maxBuffer:65536});
@@ -24,7 +24,7 @@ export function environment(c,profile){
 export function runProcess(c,r,context,input){
  noLinks(input.executable);noLinks(input.cwd);
  const work=inside(c.root,'lanes',r.profile,'work',r.id);mkdirSync(work,{recursive:true});
- const payload={...input,statusFile:inside(work,'live.json'),maxOutputBytes:128*1024,cancelFile:context.cancelFile,revokedFile:context.revokedFile,deadlineMs:context.grant.expiresAt};
+ const payload={...input,statusFile:inside(work,'live.json'),maxOutputBytes:processOutputLimit,cancelFile:context.cancelFile,revokedFile:context.revokedFile,deadlineMs:context.grant.expiresAt};
  const p=spawnSync(c.helperPath,['run'],{input:JSON.stringify(payload),env:environment(c,r.profile),encoding:'utf8',windowsHide:true,timeout:(input.timeoutMs||40000)+20000,maxBuffer:2*1024*1024});
  if(p.status!==0||p.error)fail('ADMIN_OUTCOME_UNCERTAIN');
  let result;try{result=JSON.parse(p.stdout);}catch{fail('ADMIN_OUTCOME_UNCERTAIN');}
@@ -90,13 +90,16 @@ function managedGitHubCall(c, r, ctx) {
  if (response.error === 'account_mismatch') fail('ADMIN_GITHUB_ACCOUNT_MISMATCH');
  if (response.error === 'credential_unavailable') fail('ADMIN_UPSTREAM_REJECTED',{reason:'AUTHENTICATION_REQUIRED'});
  if (response.error === 'preflight_failure' || response.error === 'endpoint_rejected') fail('ADMIN_UPSTREAM_REJECTED');
+ if (response.error === 'response_limit') {
+   if (!write) fail('ADMIN_SIZE_REJECTED');
+   if (!response.preflight) fail('ADMIN_OUTCOME_UNCERTAIN');
+ }
  const status = response.status;
  if (response.error || !Number.isInteger(status) || status >= 300) {
    if (write && !response.preflight && (!status || status === 408 || status >= 500 || status < 400)) fail('ADMIN_OUTCOME_UNCERTAIN');
    fail('ADMIN_UPSTREAM_REJECTED',{httpStatus:status,reason:status===401?'AUTHENTICATION_REQUIRED':status===403?'PERMISSION_DENIED':status===404?'NOT_FOUND':status===422?'VALIDATION_REJECTED':status===429?'RATE_LIMITED':undefined});
  }
- let data;
- try { data = JSON.parse(response.body); } catch { data = response.body; }
+ const { data } = response;
  if (graph && data?.errors?.length) fail('ADMIN_OUTCOME_UNCERTAIN');
  return {status,headers:response.headers,data,complete:!response.headers.link};
 }

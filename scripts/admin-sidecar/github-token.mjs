@@ -1,10 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { noLinks, sha } from './core.mjs';
+import { noLinks, processOutputLimit, sha } from './core.mjs';
 
 const origin = 'https://api.github.com';
-const responseLimit = 115 * 1024;
 const safeHeaders = ['x-github-request-id', 'x-accepted-github-permissions',
   'retry-after', 'link', 'x-ratelimit-remaining', 'x-ratelimit-reset'];
 
@@ -59,19 +58,19 @@ async function send(input, token, fetchRequest) {
   }
   if (response.status >= 300) {
     await response.body?.cancel();
-    return { status: response.status, headers, body: '' };
+    return { status: response.status, headers, data: '' };
   }
-  const chunks = [];
-  let size = 0;
-  if (response.body) {
-    for await (const chunk of response.body) {
-      size += chunk.length;
-      if (size > responseLimit) return { error: 'response_limit' };
-      chunks.push(chunk);
-    }
-  }
-  const body = Buffer.concat(chunks).toString('utf8').replaceAll(token, '[redacted]');
-  return { status: response.status, headers, body };
+  const text = await response.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  return { status: response.status, headers, data };
+}
+
+function encodeResponse(response, token) {
+  let output = JSON.stringify(response);
+  if (token) output = output.replaceAll(token, '[redacted]');
+  if (Buffer.byteLength(output) <= processOutputLimit) return output;
+  return JSON.stringify({ error: 'response_limit', preflight: response.preflight });
 }
 
 export async function requestWithCredential(input, {
@@ -81,17 +80,17 @@ export async function requestWithCredential(input, {
   let token;
   try {
     token = credential(input);
-    if (!token) return { error: 'credential_unavailable' };
+    if (!token) return encodeResponse({ error: 'credential_unavailable' });
     account = await send({ method: 'GET', endpoint: 'user' }, token, fetchRequest);
-    if (account.status !== 200) return { ...account, preflight: true };
-    const login = JSON.parse(account.body)?.login;
+    if (account.status !== 200) return encodeResponse({ ...account, preflight: true }, token);
+    const login = account.data?.login;
     if (typeof login !== 'string' || login.toLowerCase() !== input.expectedLogin.toLowerCase()) {
-      return { error: 'account_mismatch' };
+      return encodeResponse({ error: 'account_mismatch' });
     }
   } catch {
-    return { error: 'preflight_failure' };
+    return encodeResponse({ error: 'preflight_failure' });
   }
-  return send(input, token, fetchRequest);
+  return encodeResponse(await send(input, token, fetchRequest), token);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -99,7 +98,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const chunks = [];
     for await (const chunk of process.stdin) chunks.push(chunk);
     const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    process.stdout.write(JSON.stringify(await requestWithCredential(input)));
+    process.stdout.write(await requestWithCredential(input));
   } catch {
     process.stdout.write(JSON.stringify({ error: 'transport_failure' }));
   }
